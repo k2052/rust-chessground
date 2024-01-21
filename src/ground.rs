@@ -27,17 +27,19 @@ use cairo::{Context, Matrix};
 
 use relm::{Relm, Widget, Update, StreamHandle};
 
-use shakmaty::{Square, Rank, Color, Role, Board, Move, MoveList, Chess, Position};
+use shakmaty::{Material, Piece, Square, Rank, Color, Role, Board, Move, MoveList, Chess, Position};
 
-use util::{file_to_float, pos_to_square, rank_to_float};
+use util::{pos_to_pocket, pos_to_square};
 use pieces::Pieces;
 use drawable::{Drawable, DrawShape};
+use pockets::Pockets;
 use promotable::Promotable;
 use boardstate::BoardState;
 
 type Stream = StreamHandle<GroundMsg>;
 
 pub struct Model {
+    relm: Relm<Ground>,
     state: Rc<RefCell<State>>,
 }
 
@@ -50,6 +52,7 @@ impl fmt::Debug for Model {
 /// Chessground events and messages.
 #[derive(Debug, Msg)]
 pub enum GroundMsg {
+    ClearShapes,
     /// Flip the board.
     Flip,
     /// Set the board orientation.
@@ -58,9 +61,11 @@ pub enum GroundMsg {
     SetPos(Pos),
     /// Set up a board.
     SetBoard(Board),
+    SetPockets(Material, Color),
 
     /// Sent when the completed a piece drag or move.
     UserMove(Square, Square, Option<Role>),
+    UserDrop(Piece, Square),
     /// Sent when shapes are added, removed or cleared.
     ShapesChanged(Vec<DrawShape>),
 }
@@ -164,8 +169,9 @@ impl Update for Ground {
     type ModelParam = ();
     type Msg = GroundMsg;
 
-    fn model(_: &Relm<Self>, _: ()) -> Model {
+    fn model(relm: &Relm<Self>, _: ()) -> Model {
         Model {
+            relm: relm.clone(),
             state: Rc::new(RefCell::new(State::new())),
         }
     }
@@ -174,6 +180,10 @@ impl Update for Ground {
         let mut state = self.model.state.borrow_mut();
 
         match event {
+            GroundMsg::ClearShapes => {
+                let stream = self.model.relm.stream().clone();
+                state.clear_shapes(&stream, &self.drawing_area);
+            },
             GroundMsg::Flip => {
                 let orientation = state.board_state.orientation();
                 state.board_state.set_orientation(!orientation);
@@ -201,6 +211,9 @@ impl Update for Ground {
                 state.promotable.cancel();
                 self.drawing_area.queue_draw();
             },
+            GroundMsg::SetPockets(pockets, turn) => {
+                state.pockets.set_pockets(pockets, turn);
+            },
             GroundMsg::UserMove(orig, dest, None) if state.board_state.valid_move(orig, dest) => {
                 if state.board_state.legals().iter().any(|m| m.from() == Some(orig) && m.to() == dest && m.promotion().is_some()) {
                     let color = state.pieces.figurine_at(orig).map_or_else(|| {
@@ -208,6 +221,10 @@ impl Update for Ground {
                     }, |figurine| figurine.piece().color);
                     state.promotable.start(color, orig, dest);
                     self.drawing_area.queue_draw();
+                }
+            },
+            GroundMsg::UserDrop(piece, to) => {
+                if state.board_state.legals().contains(&Move::Put { role: piece.role, to }) {
                 }
             },
             _ => {}
@@ -307,6 +324,7 @@ struct State {
     drawable: Drawable,
     promotable: Promotable,
     pieces: Pieces,
+    pockets: Pockets,
 }
 
 impl State {
@@ -316,7 +334,13 @@ impl State {
             drawable: Drawable::new(),
             promotable: Promotable::new(),
             pieces: Pieces::new(),
+            pockets: Pockets::new(),
         }
+    }
+
+    fn clear_shapes(&mut self, stream: &Stream, drawing_area: &DrawingArea) {
+        let ctx = EventContext::new(&self.board_state, stream, drawing_area, (0.0, 0.0));
+        self.drawable.clear(&ctx);
     }
 
     fn queue_animation(&mut self, drawing_area: &DrawingArea) {
@@ -330,18 +354,19 @@ impl State {
         cr.set_matrix(ctx.matrix());
 
         // draw
-        self.board_state.draw(cr)?;
-        self.pieces.draw(cr, &self.board_state, &self.promotable)?;
-        self.drawable.draw(cr)?;
-        self.pieces.draw_drag(cr, &self.board_state)?;
-        self.promotable.draw(cr, &self.board_state)?;
-
-        Ok(())
+        self.board_state.draw(cr);
+        self.pieces.draw(cr, &self.board_state, &self.promotable);
+        self.drawable.draw(cr);
+        self.pieces.draw_drag(cr, &self.board_state);
+        self.pockets.draw(cr, &self.board_state);
+        self.pockets.draw_drag(cr, &self.board_state);
+        self.promotable.draw(cr, &self.board_state);
     }
 
     fn button_release_event(&mut self, stream: &Stream, drawing_area: &DrawingArea, e: &EventButton) {
         let ctx = EventContext::new(&self.board_state, stream, drawing_area, e.position());
         self.pieces.drag_mouse_up(&ctx);
+        self.pockets.drag_mouse_up(&ctx);
         self.drawable.mouse_up(&ctx);
     }
 
@@ -349,6 +374,7 @@ impl State {
         let ctx = EventContext::new(&self.board_state, stream, drawing_area, e.position());
         self.promotable.mouse_move(&ctx);
         self.pieces.drag_mouse_move(&ctx);
+        self.pockets.drag_mouse_move(&ctx);
         self.drawable.mouse_move(&ctx);
     }
 
@@ -360,6 +386,7 @@ impl State {
         if let Inhibit(false) = promotable.mouse_down(pieces, &ctx) {
             pieces.selection_mouse_down(&ctx, e);
             pieces.drag_mouse_down(&ctx, e);
+            self.pockets.drag_mouse_down(&ctx, e);
             self.drawable.mouse_down(&ctx, e);
         }
     }
@@ -385,6 +412,17 @@ impl<'a> WidgetContext<'a> {
         matrix.translate(-4.0, -4.0);
 
         WidgetContext { matrix, drawing_area }
+    }
+
+    fn adjust_pos(&self, (x, y): (f64, f64)) -> (f64, f64) {
+        let alloc = self.drawing_area.get_allocation();
+        let size = max(min(alloc.width, alloc.height), 9);
+        let size = f64::from(size);
+        let x = x - f64::from(alloc.x) - f64::from(alloc.width) / 2.0;
+        let y = y - f64::from(alloc.y) - f64::from(alloc.height) / 2.0;
+        let x = x / (size / 9.0);
+        let y = y / (size / 9.0);
+        (8.0 - (4.0 - x), 8.0 - (4.0 - y))
     }
 
     fn invert_pos(&self, (x, y): (f64, f64)) -> (f64, f64) {
@@ -427,6 +465,7 @@ impl<'a> WidgetContext<'a> {
 pub(crate) struct EventContext<'a> {
     widget: WidgetContext<'a>,
     stream: &'a Stream,
+    pocket: Option<usize>,
     pos: (f64, f64),
     square: Option<Square>,
 }
@@ -438,14 +477,16 @@ impl<'a> EventContext<'a> {
            pos: (f64, f64)) -> EventContext<'a>
     {
         let widget = WidgetContext::new(board_state, drawing_area);
-        let alloc = drawing_area.allocation();
-        let pos = (pos.0 + f64::from(alloc.x()), pos.1 + f64::from(alloc.y()));
+        let alloc = drawing_area.get_allocation();
+        let pos = (pos.0 + f64::from(alloc.x()), pos.1 + f64::from(alloc.y));
+        let pocket = pos_to_pocket(widget.adjust_pos(pos));
         let pos = widget.invert_pos(pos);
         let square = pos_to_square(pos);
 
         EventContext {
             widget,
             stream,
+            pocket,
             pos,
             square,
         }
@@ -465,5 +506,9 @@ impl<'a> EventContext<'a> {
 
     pub fn square(&self) -> Option<Square> {
         self.square
+    }
+
+    pub fn pocket(&self) -> Option<usize> {
+        self.pocket
     }
 }

@@ -23,7 +23,7 @@
 extern crate gtk;
 extern crate gdk;
 extern crate cairo;
-extern crate rsvg;
+extern crate librsvg;
 extern crate shakmaty;
 extern crate time;
 extern crate relm;
@@ -34,6 +34,7 @@ mod ground;
 mod boardstate;
 mod pieceset;
 mod pieces;
+mod pockets;
 mod promotable;
 mod drawable;
 mod util;

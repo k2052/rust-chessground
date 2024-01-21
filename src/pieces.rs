@@ -19,8 +19,7 @@ use std::f64::consts::PI;
 use time::SteadyTime;
 
 use gdk::EventButton;
-use cairo::Context;
-use rsvg::HandleExt;
+use cairo::{Context, Rectangle};
 
 use shakmaty::{Square, Piece, Bitboard, Board};
 
@@ -36,24 +35,24 @@ pub struct Pieces {
     past: SteadyTime,
 }
 
-struct Drag {
-    square: Square,
-    piece: Piece,
-    start: (f64, f64),
-    pos: (f64, f64),
-    threshold: bool,
+pub struct Drag {
+    pub square: Square,
+    pub piece: Piece,
+    pub start: (f64, f64),
+    pub pos: (f64, f64),
+    pub threshold: bool,
 }
 
 pub struct Figurine {
-    square: Square,
-    piece: Piece,
-    start: (f64, f64),
-    elapsed: f64,
-    time: SteadyTime,
-    last_drag: SteadyTime,
-    fading: bool,
-    replaced: bool,
-    dragging: bool,
+    pub square: Square,
+    pub piece: Piece,
+    pub start: (f64, f64),
+    pub elapsed: f64,
+    pub time: SteadyTime,
+    pub last_drag: SteadyTime,
+    pub fading: bool,
+    pub replaced: bool,
+    pub dragging: bool,
 }
 
 impl Pieces {
@@ -309,7 +308,13 @@ impl Pieces {
         cr.translate(-0.5, -0.5);
         cr.scale(state.piece_set().scale(), state.piece_set().scale());
 
-        state.piece_set().by_piece(&figurine.piece).render_cairo(cr);
+        let renderer = librsvg::CairoRenderer::new(state.piece_set().by_piece(&figurine.piece));
+        renderer.render_document(cr, &Rectangle {
+            x: 0.0,
+            y: 0.0,
+            width: 177.0,
+            height: 177.0,
+        }).expect("render");
 
         cr.pop_group_to_source()?;
 
@@ -388,9 +393,15 @@ impl Pieces {
                 cr.rotate(state.orientation().fold_wb(0.0, PI));
                 cr.translate(-0.5, -0.5);
                 cr.scale(state.piece_set().scale(), state.piece_set().scale());
-                state.piece_set().by_piece(&drag.piece).render_cairo(cr);
-                cr.pop_group_to_source()?;
-                cr.paint()?;
+                let renderer = librsvg::CairoRenderer::new(state.piece_set().by_piece(&drag.piece));
+                renderer.render_document(cr, &Rectangle {
+                    x: 0.0,
+                    y: 0.0,
+                    width: 177.0,
+                    height: 177.0,
+                }).expect("render");
+                cr.pop_group_to_source();
+                cr.paint();
             }
             _ => {}
         }
@@ -410,7 +421,7 @@ impl Figurine {
         self.elapsed = 0.0;
     }
 
-    fn pos(&self) -> (f64, f64) {
+    pub fn pos(&self) -> (f64, f64) {
         if self.fading {
             self.start
         } else {
@@ -419,7 +430,7 @@ impl Figurine {
         }
     }
 
-    fn alpha(&self) -> f64 {
+    pub fn alpha(&self) -> f64 {
         if self.replaced {
             ease(0.5, 0.0, self.elapsed)
         } else if self.fading {
