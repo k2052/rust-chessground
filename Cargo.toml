@@ -10,15 +10,15 @@ categories = ["games", "gui"]
 keywords = ["chess"]
 
 [dependencies]
-gdk = "^0.16.0"
-glib = "^0.16.0"
-gtk = "^0.16.0"
-cairo-rs = "0.18.0"
-librsvg = "2.57.1"
+librsvg = "2.56.91"
 time = "0.3"
 relm = "0.24"
 relm-derive = "0.24"
-shakmaty = "0.26"
+shakmaty = "0.26.0"
+cairo-rs = "0.16.1"
+glib = "0.16.2"
+gtk = "0.16.1"
+gdk = "0.16.1"
 
 [dev-dependencies]
 rand = "0.8"

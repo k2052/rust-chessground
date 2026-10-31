@@ -29,7 +29,7 @@ use relm::{Relm, Widget, Update, StreamHandle};
 
 use shakmaty::{Material, Piece, Square, Rank, Color, Role, Board, Move, MoveList, Chess, Position};
 
-use util::{pos_to_pocket, pos_to_square};
+use util::{pos_to_pocket, pos_to_square, file_to_float, rank_to_float};
 use pieces::Pieces;
 use drawable::{Drawable, DrawShape};
 use pockets::Pockets;
@@ -349,18 +349,32 @@ impl State {
         self.promotable.queue_animation(&ctx);
     }
 
-    fn draw(&self, drawing_area: &DrawingArea, cr: &Context) -> Result<(), cairo::Error> {
+    // fn draw(&self, drawing_area: &DrawingArea, cr: &Context) {
+    //     let ctx = WidgetContext::new(&self.board_state, drawing_area);
+    //     cr.set_matrix(ctx.matrix());
+
+    //     // draw
+    //     self.board_state.draw(cr);
+    //     self.pieces.draw(cr, &self.board_state, &self.promotable);
+    //     self.drawable.draw(cr);
+    //     self.pieces.draw_drag(cr, &self.board_state);
+    //     self.pockets.draw(cr, &self.board_state);
+    //     self.pockets.draw_drag(cr, &self.board_state);
+    //     self.promotable.draw(cr, &self.board_state);
+    // }
+
+        fn draw(&self, drawing_area: &DrawingArea, cr: &Context) -> Result<(), cairo::Error> {
         let ctx = WidgetContext::new(&self.board_state, drawing_area);
         cr.set_matrix(ctx.matrix());
 
         // draw
-        self.board_state.draw(cr);
-        self.pieces.draw(cr, &self.board_state, &self.promotable);
-        self.drawable.draw(cr);
-        self.pieces.draw_drag(cr, &self.board_state);
-        self.pockets.draw(cr, &self.board_state);
-        self.pockets.draw_drag(cr, &self.board_state);
-        self.promotable.draw(cr, &self.board_state);
+        self.board_state.draw(cr)?;
+        self.pieces.draw(cr, &self.board_state, &self.promotable)?;
+        self.drawable.draw(cr)?;
+        self.pieces.draw_drag(cr, &self.board_state)?;
+        self.promotable.draw(cr, &self.board_state)?;
+
+        Ok(())
     }
 
     fn button_release_event(&mut self, stream: &Stream, drawing_area: &DrawingArea, e: &EventButton) {
@@ -414,16 +428,16 @@ impl<'a> WidgetContext<'a> {
         WidgetContext { matrix, drawing_area }
     }
 
-    fn adjust_pos(&self, (x, y): (f64, f64)) -> (f64, f64) {
-        let alloc = self.drawing_area.get_allocation();
-        let size = max(min(alloc.width, alloc.height), 9);
-        let size = f64::from(size);
-        let x = x - f64::from(alloc.x) - f64::from(alloc.width) / 2.0;
-        let y = y - f64::from(alloc.y) - f64::from(alloc.height) / 2.0;
-        let x = x / (size / 9.0);
-        let y = y / (size / 9.0);
-        (8.0 - (4.0 - x), 8.0 - (4.0 - y))
-    }
+    // fn adjust_pos(&self, (x, y): (f64, f64)) -> (f64, f64) {
+    //     let alloc = self.drawing_area.get_allocation();
+    //     let size = max(min(alloc.width, alloc.height), 9);
+    //     let size = f64::from(size);
+    //     let x = x - f64::from(alloc.x) - f64::from(alloc.width) / 2.0;
+    //     let y = y - f64::from(alloc.y) - f64::from(alloc.height) / 2.0;
+    //     let x = x / (size / 9.0);
+    //     let y = y / (size / 9.0);
+    //     (8.0 - (4.0 - x), 8.0 - (4.0 - y))
+    // }
 
     fn invert_pos(&self, (x, y): (f64, f64)) -> (f64, f64) {
         self.matrix()
@@ -465,7 +479,7 @@ impl<'a> WidgetContext<'a> {
 pub(crate) struct EventContext<'a> {
     widget: WidgetContext<'a>,
     stream: &'a Stream,
-    pocket: Option<usize>,
+   // pocket: Option<usize>,
     pos: (f64, f64),
     square: Option<Square>,
 }
@@ -477,16 +491,14 @@ impl<'a> EventContext<'a> {
            pos: (f64, f64)) -> EventContext<'a>
     {
         let widget = WidgetContext::new(board_state, drawing_area);
-        let alloc = drawing_area.get_allocation();
-        let pos = (pos.0 + f64::from(alloc.x()), pos.1 + f64::from(alloc.y));
-        let pocket = pos_to_pocket(widget.adjust_pos(pos));
+        let alloc = drawing_area.allocation();
+        let pos = (pos.0 + f64::from(alloc.x()), pos.1 + f64::from(alloc.y()));
         let pos = widget.invert_pos(pos);
         let square = pos_to_square(pos);
 
         EventContext {
             widget,
             stream,
-            pocket,
             pos,
             square,
         }

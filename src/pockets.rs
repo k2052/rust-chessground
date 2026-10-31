@@ -43,13 +43,13 @@ impl Pockets {
         cr.translate(-0.5, -0.5);
         cr.scale(state.piece_set().scale(), state.piece_set().scale());
 
-        let renderer = librsvg::CairoRenderer::new(state.piece_set().by_piece(&figurine.piece));
-        renderer.render_document(cr, &Rectangle {
-            x: 0.0,
-            y: 0.0,
-            width: 177.0,
-            height: 177.0,
-        }).expect("render");
+        let renderer = rsvg::CairoRenderer::new(state.piece_set().by_piece(&figurine.piece));
+        renderer.render_document(cr, &cairo::Rectangle.new(
+            0.0,
+            0.0,
+            177.0,
+            177.0,
+        )).expect("render");
 
         cr.pop_group_to_source();
 
@@ -64,13 +64,13 @@ impl Pockets {
                 cr.rotate(state.orientation().fold(0.0, PI));
                 cr.translate(-0.5, -0.5);
                 cr.scale(state.piece_set().scale(), state.piece_set().scale());
-                let renderer = librsvg::CairoRenderer::new(state.piece_set().by_piece(&drag.piece));
-                renderer.render_document(cr, &Rectangle {
-                    x: 0.0,
-                    y: 0.0,
-                    width: 177.0,
-                    height: 177.0,
-                }).expect("render");
+                let renderer = rsvg::CairoRenderer::new(state.piece_set().by_piece(&drag.piece));
+                renderer.render_document(cr, &cairo::Rectangle::new(
+                    0.0,
+                    0.0,
+                    177.0,
+                    177.0,
+                )).expect("render");
                 cr.pop_group_to_source();
                 cr.paint();
             }
@@ -134,24 +134,24 @@ impl Pockets {
     }
 
     pub(crate) fn drag_mouse_down(&mut self, ctx: &EventContext, e: &EventButton) {
-        if e.get_button() == 1 {
-            if let Some(pocket) = ctx.pocket() {
-                let piece = if let Some(figurine) = self.figurines.get_mut(pocket) {
-                    figurine.dragging = true;
-                    figurine.piece
-                } else {
-                    return;
-                };
+        // if e.get_button() == 1 {
+        //     if let Some(pocket) = ctx.pocket() {
+        //         let piece = if let Some(figurine) = self.figurines.get_mut(pocket) {
+        //             figurine.dragging = true;
+        //             figurine.piece
+        //         } else {
+        //             return;
+        //         };
 
-                self.drag = Some(Drag {
-                    square: Square::A1, // Dummy square.
-                    piece,
-                    start: ctx.pos(),
-                    pos: ctx.pos(),
-                    threshold: false,
-                });
-            }
-        }
+        //         self.drag = Some(Drag {
+        //             square: Square::A1, // Dummy square.
+        //             piece,
+        //             start: ctx.pos(),
+        //             pos: ctx.pos(),
+        //             threshold: false,
+        //         });
+        //     }
+        // }
     }
 
     pub(crate) fn drag_mouse_move(&mut self, ctx: &EventContext) {

@@ -19,7 +19,7 @@ use std::f64::consts::PI;
 use time::SteadyTime;
 
 use gdk::EventButton;
-use cairo::{Context, Rectangle};
+use gtk::cairo::{Context, Rectangle};
 
 use shakmaty::{Square, Piece, Bitboard, Board};
 
@@ -67,7 +67,7 @@ impl Pieces {
             selected: None,
             drag: None,
             past: now,
-            figurines: board.clone().into_iter().map(|(square, piece)| Figurine {
+            figurines: board.pieces().map(|(square, piece)| Figurine {
                 square,
                 piece,
                 start: (0.5 + file_to_float(square.file()), 7.5 - rank_to_float(square.rank())),
@@ -87,10 +87,12 @@ impl Pieces {
         self.figurines.retain(|f| !f.fading || f.alpha() > 0.0001);
 
         // diff
-        let mut added: Vec<_> = board.clone().into_iter().filter(|&(sq, piece)| {
+        // let mut added: Vec<_> = board.clone().into_iter().filter(|&(sq, piece)| {
+        //     self.figurine_at(sq).map_or(true, |f| f.piece != piece)
+        // }).collect();
+       let mut added: Vec<_> = board.pieces().filter(|&(sq, piece)| {
             self.figurine_at(sq).map_or(true, |f| f.piece != piece)
         }).collect();
-
         for figurine in &mut self.figurines {
             if figurine.fading {
                 continue;
@@ -308,13 +310,19 @@ impl Pieces {
         cr.translate(-0.5, -0.5);
         cr.scale(state.piece_set().scale(), state.piece_set().scale());
 
-        let renderer = librsvg::CairoRenderer::new(state.piece_set().by_piece(&figurine.piece));
-        renderer.render_document(cr, &Rectangle {
-            x: 0.0,
-            y: 0.0,
-            width: 177.0,
-            height: 177.0,
-        }).expect("render");
+        let renderer = rsvg::CairoRenderer::new(state.piece_set().by_piece(&figurine.piece));
+        unsafe {
+                    let cr_ptr = cr.to_raw_none();
+            let cairo_ctx = cairo::Context::from_raw_borrow(cr_ptr);
+                           renderer.render_document(cairo_ctx,  &cairo::Rectangle::new(
+            0.0,
+            0.0,
+           177.0,
+           177.0
+        )).expect("render");
+
+        }
+
 
         cr.pop_group_to_source()?;
 
@@ -393,13 +401,13 @@ impl Pieces {
                 cr.rotate(state.orientation().fold_wb(0.0, PI));
                 cr.translate(-0.5, -0.5);
                 cr.scale(state.piece_set().scale(), state.piece_set().scale());
-                let renderer = librsvg::CairoRenderer::new(state.piece_set().by_piece(&drag.piece));
-                renderer.render_document(cr, &Rectangle {
-                    x: 0.0,
-                    y: 0.0,
-                    width: 177.0,
-                    height: 177.0,
-                }).expect("render");
+                let renderer = rsvg::CairoRenderer::new(state.piece_set().by_piece(&drag.piece));
+                renderer.render_document(cr, &cairo::Rectangle::new(
+                    0.0,
+                    0.0,
+                    177.0,
+                    177.0,
+                )).expect("render");
                 cr.pop_group_to_source();
                 cr.paint();
             }

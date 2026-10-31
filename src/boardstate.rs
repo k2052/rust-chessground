@@ -162,7 +162,7 @@ impl BoardState {
         cr.save()?;
         cr.translate(x, y);
         cr.rotate(self.orientation.fold_wb(0.0, PI));
-        cr.move_to(-0.5 * e.width, 0.5 * font.height - font.descent);
+        cr.move_to(-0.5 * e.width(), 0.5 * font.height() - font.descent());
         cr.show_text(text)?;
         cr.restore()?;
 
